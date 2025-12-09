@@ -1,7 +1,7 @@
-import { Config } from '@remotion/cli/config';
-import { registerRoot } from 'remotion';
+// remotion-app/remotion.config.js
+
+import { Config } from "@remotion/cli/config";
 
 Config.setVideoImageFormat("jpeg");
 Config.setCodec("h264");
 Config.setOverwriteOutput(true);
-

@@ -3,16 +3,16 @@ export async function GET() {
       // --- 1. DEMO PAYLOAD (fake test data) ---
       const payload = {
         id: "demo-123",
-        bgImage: "https://example.com/demo-bg.png",
-        audio: "https://example.com/demo-audio.mp3",
-        subtitles: "https://example.com/demo-subs.json",
-        basicData: "https://example.com/demo-basic.json",
-        thumbnail: "https://example.com/demo-thumb.png"
+        bgImage: "https://i.pinimg.com/1200x/38/99/00/389900dd859b26489093fb2df80cebf3.jpg",
+        audio: "https://www.learningcontainer.com/wp-content/uploads/2020/02/Kalimba.mp3",
+        subtitles: "https://microsoftedge.github.io/Demos/json-dummy-data/64KB.json",
+        basicData: "https://microsoftedge.github.io/Demos/json-dummy-data/64KB.json",
+        thumbnail: "https://in.pinterest.com/pin/526850856430464001/"
       };
   
       // --- 2. SEND TO GITHUB ACTION (repository_dispatch) ---
       const res = await fetch(
-        "https://api.github.com/repos/YOUR_GITHUB_USERNAME/YOUR_REPO/dispatches",
+        "https://github.com/captainivan/youtube-render/dispatches",
         {
           method: "POST",
           headers: {

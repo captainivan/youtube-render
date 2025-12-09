@@ -7,37 +7,31 @@ on:
 jobs:
   render:
     runs-on: ubuntu-latest
-    timeout-minutes: 120  # increase if needed
+    timeout-minutes: 120
 
     steps:
-      # STEP 1 — Checkout Repo
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
 
-      # STEP 2 — Setup Node.js
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
 
-      # STEP 3 — Install Dependencies
-      - name: Install dependencies
+      - name: Install Dependencies
         run: npm install
 
-      # STEP 4 — Render Video with Remotion
-      - name: Render video
+      - name: Render Video with Remotion
         run: |
           echo "Rendering with payload:"
           echo '${{ toJson(github.event.client_payload) }}'
-
           node remotion/render.js '${{ toJson(github.event.client_payload) }}'
 
-      # STEP 5 — Upload to your API route
-      - name: Upload rendered video to Next.js API
+      - name: Upload Rendered Video to API
         run: |
-          echo "Uploading to API..."
+          echo "Uploading video file..."
           curl -X POST \
             -H "Content-Type: video/mp4" \
             -H "x-secret-key: ${{ secrets.RENDER_UPLOAD_KEY }}" \
             --data-binary "@final.mp4" \
-            "https://YOUR_DOMAIN.com/api/youtube/receive?jobId=${{ github.event.client_payload.id }}"
+            "https://youtube-render.vercel.app/api/youtube/receive?jobId=${{ github.event.client_payload.id }}"
