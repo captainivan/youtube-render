@@ -1,6 +1,5 @@
 export async function GET() {
   try {
-    // --- 1. DEMO PAYLOAD (fake test data) ---
     const payload = {
       id: "demo-123",
       bgImage: "https://shunyasongs.vercel.app/tmp/bgImage.png",
@@ -10,7 +9,6 @@ export async function GET() {
       thumbnail: "https://shunyasongs.vercel.app/tmp/thumbnail.png"
     };
 
-    // --- 2. SEND TO GITHUB ACTION ---
     const res = await fetch(
       "https://api.github.com/repos/captainivan/youtube-render/dispatches",
       {
@@ -22,9 +20,7 @@ export async function GET() {
         },
         body: JSON.stringify({
           event_type: "run_video_render",
-          client_payload: {
-            props: payload   // 🔥 THIS FIXES EVERYTHING
-          }
+          client_payload: payload
         }),
       }
     );

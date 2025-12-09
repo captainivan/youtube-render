@@ -1,4 +1,4 @@
-name: Render Video Dynamic Duration + YouTube Upload
+name: Render Video + Dynamic Duration + YouTube Upload
 
 on:
   workflow_dispatch: {}
@@ -10,29 +10,21 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # ----------------------------------------
-      # 1. Checkout repository
-      # ----------------------------------------
+      # 1. Checkout code
       - name: Checkout repo
         uses: actions/checkout@v4
 
-      # ----------------------------------------
-      # 2. Setup Node.js
-      # ----------------------------------------
+      # 2. Setup Node
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: 20
 
-      # ----------------------------------------
       # 3. Install dependencies
-      # ----------------------------------------
       - name: Install dependencies
         run: npm install
 
-      # ----------------------------------------
-      # 4. Capture props sent from Next.js
-      # ----------------------------------------
+      # 4. Capture payload exactly as you send it
       - name: Prepare props
         id: props
         run: |
@@ -43,20 +35,15 @@ jobs:
           echo "Received Props:"
           echo '${{ steps.props.outputs.props }}'
 
-      # ----------------------------------------
-      # 5. Download AI basicData.json
-      # ----------------------------------------
+      # 5. Download basicData.json
       - name: Download basic data
         run: |
-          BASIC_URL=$(echo '${{ steps.props.outputs.props }}' | jq -r '.basicDataUrl')
+          BASIC_URL=$(echo '${{ steps.props.outputs.props }}' | jq -r '.basicData')
           echo "Downloading basicData.json from: $BASIC_URL"
           curl -L -o basicData.json "$BASIC_URL"
-          echo "Downloaded basicData.json:"
           cat basicData.json
 
-      # ----------------------------------------
-      # 6. Calculate dynamic audio duration
-      # ----------------------------------------
+      # 6. Calculate audio duration
       - name: Calculate audio duration
         run: |
           npm install get-audio-duration
@@ -66,34 +53,29 @@ jobs:
           import { getAudioDurationInSeconds } from "get-audio-duration";
 
           const props = JSON.parse('${{ steps.props.outputs.props }}');
-          const audioUrl = props.audioUrl;
+          const audio = props.audio;
 
-          if (!audioUrl) {
-            console.error("❌ audioUrl missing in props!");
+          if (!audio) {
+            console.error("❌ audio missing in payload");
             process.exit(1);
           }
 
-          console.log("Fetching audio:", audioUrl);
+          console.log("Fetching audio:", audio);
 
-          const seconds = await getAudioDurationInSeconds(audioUrl);
+          const seconds = await getAudioDurationInSeconds(audio);
           const fps = 30;
           const durationInFrames = Math.ceil(seconds * fps);
 
-          console.log("🎵 Audio seconds:", seconds);
-          console.log("🎞 Duration frames:", durationInFrames);
+          console.log("🎵 Duration (sec):", seconds);
+          console.log("🎞 Frames:", durationInFrames);
 
-          fs.writeFileSync(
-            "duration.json",
-            JSON.stringify({ durationInFrames, fps })
-          );
+          fs.writeFileSync("duration.json", JSON.stringify({ durationInFrames, fps }));
           EOF
 
-      - name: Show duration.json
+      - name: Show duration
         run: cat duration.json
 
-      # ----------------------------------------
-      # 7. Render Remotion video using dynamic duration
-      # ----------------------------------------
+      # 7. Render video
       - name: Render video
         run: |
           PROPS='${{ steps.props.outputs.props }}'
@@ -101,25 +83,21 @@ jobs:
 
           FINAL_PROPS=$(jq -n --argjson a "$PROPS" --argjson b "$DURATION" '$a + $b')
 
-          echo "Merged FINAL PROPS:"
+          echo "Final props:"
           echo "$FINAL_PROPS"
 
           npx remotion render remotion/index.js FinalVideo \
             --props "$FINAL_PROPS" \
             --output out/video.mp4
 
-      # ----------------------------------------
-      # 8. Upload rendered video (optional)
-      # ----------------------------------------
-      - name: Upload rendered video
+      # 8. Upload artifact
+      - name: Upload final video
         uses: actions/upload-artifact@v4
         with:
           name: final-video
           path: out/video.mp4
 
-      # ----------------------------------------
-      # 9. Upload to YouTube using AI basicData.json
-      # ----------------------------------------
+      # 9. Upload video to YouTube
       - name: Upload to YouTube
         run: |
           npm install googleapis
@@ -128,51 +106,42 @@ jobs:
           import fs from "fs";
           import { google } from "googleapis";
 
-          const basic = JSON.parse(fs.readFileSync("basicData.json", "utf8"));
+          const basic = JSON.parse(fs.readFileSync("basicData.json"));
 
           const title = basic.title || "AI Generated Video";
-          const description = basic.desc || "Generated using AI automation.";
-          const tags = basic.tags || ["AI", "automation", "remotion"];
+          const description = basic.description || "Generated by automation.";
+          const tags = basic.tags || [];
 
-          console.log("📤 Uploading to YouTube...");
+          console.log("Uploading to YouTube...");
           console.log("Title:", title);
-          console.log("Tags:", tags);
 
-          const OAuth2 = google.auth.OAuth2;
-
-          const client = new OAuth2(
+          const oauth2Client = new google.auth.OAuth2(
             process.env.YT_CLIENT_ID,
             process.env.YT_CLIENT_SECRET,
-            "urn:ietf:wg:oauth:2.0:oob"
+            process.env.YT_REDIRECT_URI
           );
 
-          client.setCredentials({
+          oauth2Client.setCredentials({
             refresh_token: process.env.YT_REFRESH_TOKEN
           });
 
-          const youtube = google.youtube({
-            version: "v3",
-            auth: client
+          const youtube = google.youtube({ version: "v3", auth: oauth2Client });
+
+          const res = await youtube.videos.insert({
+            part: "snippet,status",
+            requestBody: {
+              snippet: { title, description, tags },
+              status: { privacyStatus: "public" }
+            },
+            media: {
+              body: fs.createReadStream("out/video.mp4")
+            }
           });
 
-          async function upload() {
-            const res = await youtube.videos.insert({
-              part: "snippet,status",
-              requestBody: {
-                snippet: { title, description, tags },
-                status: { privacyStatus: "public" }
-              },
-              media: {
-                body: fs.createReadStream("out/video.mp4")
-              }
-            });
-
-            console.log("🎉 Video uploaded! ID:", res.data.id);
-          }
-
-          upload();
+          console.log("🎉 Uploaded! Video ID:", res.data.id);
           EOF
         env:
           YT_CLIENT_ID: ${{ secrets.YT_CLIENT_ID }}
           YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
           YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
+          YT_REDIRECT_URI: ${{ secrets.YT_REDIRECT_URI }}
