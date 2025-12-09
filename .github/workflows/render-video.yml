@@ -7,7 +7,6 @@ on:
 jobs:
   render:
     runs-on: ubuntu-latest
-    timeout-minutes: 40
 
     steps:
       - name: Checkout Repo
@@ -21,20 +20,18 @@ jobs:
       - name: Install Dependencies
         run: npm install
 
-      # Debug raw payload
       - name: Debug Payload
         run: |
           echo "RAW PAYLOAD:"
           echo '${{ toJson(github.event.client_payload) }}'
 
-      # Convert props into valid JSON
+      # ⭐ FIXED STEP
       - name: Prepare Props JSON
         id: prep
         run: |
-          JSON=$(echo '${{ toJson(github.event.client_payload.props) }}')
+          JSON=$(echo '${{ toJson(github.event.client_payload.props) }}' | jq -c '.')
           echo "props=$JSON" >> $GITHUB_OUTPUT
 
-      # Render video using Remotion
       - name: Render FinalVideo
         run: |
           echo "Rendering with props:"
@@ -44,7 +41,6 @@ jobs:
             --props '${{ steps.prep.outputs.props }}' \
             --output out/video.mp4
 
-      # Upload final artifact
       - name: Upload Rendered Video
         uses: actions/upload-artifact@v4
         with:
