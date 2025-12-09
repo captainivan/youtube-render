@@ -11,21 +11,20 @@ export async function GET() {
       };
   
       // --- 2. SEND TO GITHUB ACTION (repository_dispatch) ---
-      await fetch("https://api.github.com/repos/YOUR_USER/YOUR_REPO/dispatches", {
-        method: "POST",
-        headers: {
-          "Accept": "application/vnd.github+json",
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${process.env.GITHUB_TOKEN}`
-        },
-        body: JSON.stringify({
-          event_type: "run_video_render",
-          client_payload: {
-            props: payload
-          }
-        })
-      });
-      
+      const res = await fetch(
+        "https://api.github.com/repos/captainivan/youtube-render/dispatches",
+        {
+          method: "POST",
+          headers: {
+            "Accept": "application/vnd.github+json",
+            "Authorization": `Bearer ${process.env.GITHUB_TOKEN}`,
+          },
+          body: JSON.stringify({
+            event_type: "render-video",
+            client_payload: payload,
+          }),
+        }
+      );
   
       if (!res.ok) {
         const errText = await res.text();
