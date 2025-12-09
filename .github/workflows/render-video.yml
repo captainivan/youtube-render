@@ -11,13 +11,13 @@ jobs:
 
     steps:
       # -------------------------------------------------
-      # 1. Checkout repository
+      # 1. Checkout repo
       # -------------------------------------------------
-      - name: Checkout repo
+      - name: Checkout Repo
         uses: actions/checkout@v4
 
       # -------------------------------------------------
-      # 2. Setup Node.js
+      # 2. Setup Node
       # -------------------------------------------------
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -25,13 +25,13 @@ jobs:
           node-version: 20
 
       # -------------------------------------------------
-      # 3. Install dependencies
+      # 3. Install project dependencies
       # -------------------------------------------------
       - name: Install dependencies
         run: npm install
 
       # -------------------------------------------------
-      # 4. Parse props from Next.js repository_dispatch
+      # 4. Extract props cleanly
       # -------------------------------------------------
       - name: Prepare props
         id: props
@@ -46,58 +46,57 @@ jobs:
 
           echo "props=$JSON" >> $GITHUB_OUTPUT
 
-      - name: Show props
+      - name: Show Props
         run: echo '${{ steps.props.outputs.props }}'
 
       # -------------------------------------------------
-      # 5. Download basicData.json for YouTube metadata
+      # 5. Download basicData.json
       # -------------------------------------------------
-      - name: Download basicData.json
+      - name: Download basic data
         run: |
-          URL=$(echo '${{ steps.props.outputs.props }}' | jq -r '.basicData')
-          echo "Downloading basicData.json from: $URL"
-          curl -L -o basicData.json "$URL"
+          BASIC_URL=$(echo '${{ steps.props.outputs.props }}' | jq -r '.basicData')
+          echo "Downloading basicData.json: $BASIC_URL"
+          curl -L -o basicData.json "$BASIC_URL"
           cat basicData.json
 
       # -------------------------------------------------
-      # 6. Calculate audio duration for dynamic frames
+      # 6. Calculate Audio Duration (FIXED: Download First)
       # -------------------------------------------------
-      - name: Calculate audio duration
+      - name: Calculate Audio Duration
         run: |
           npm install get-audio-duration
+
+          AUDIO_URL=$(echo '${{ steps.props.outputs.props }}' | jq -r '.audio')
+          echo "Downloading audio file: $AUDIO_URL"
+
+          curl -L -o audiofile.mp4 "$AUDIO_URL"
 
           node << 'EOF'
           import fs from "fs";
           import { getAudioDurationInSeconds } from "get-audio-duration";
 
-          const props = JSON.parse('${{ steps.props.outputs.props }}');
-          const audioUrl = props.audio;
-
-          if (!audioUrl) {
-            console.error("❌ No audio URL!");
+          if (!fs.existsSync("audiofile.mp4")) {
+            console.error("❌ Audio file failed to download");
             process.exit(1);
           }
 
-          console.log("Checking audio:", audioUrl);
-
-          const seconds = await getAudioDurationInSeconds(audioUrl);
-
+          const seconds = await getAudioDurationInSeconds("audiofile.mp4");
           const fps = 30;
           const durationInFrames = Math.ceil(seconds * fps);
 
-          console.log("Audio seconds:", seconds);
-          console.log("Frames:", durationInFrames);
+          console.log("🎵 Audio Seconds:", seconds);
+          console.log("🎞 Frames:", durationInFrames);
 
           fs.writeFileSync("duration.json", JSON.stringify({ durationInFrames, fps }));
           EOF
 
-      - name: Show duration.json
+      - name: Show Duration
         run: cat duration.json
 
       # -------------------------------------------------
-      # 7. Render the Remotion video
+      # 7. Render Remotion Video
       # -------------------------------------------------
-      - name: Render video
+      - name: Render Video
         run: |
           PROPS='${{ steps.props.outputs.props }}'
           DURATION=$(cat duration.json)
@@ -112,16 +111,16 @@ jobs:
             --output out/video.mp4
 
       # -------------------------------------------------
-      # 8. Upload output video to GitHub artifacts
+      # 8. Upload rendered video as GitHub artifact
       # -------------------------------------------------
-      - name: Upload rendered video
+      - name: Upload final video
         uses: actions/upload-artifact@v4
         with:
           name: final-video
           path: out/video.mp4
 
       # -------------------------------------------------
-      # 9. Upload to YouTube (with SAFE tag cleaning)
+      # 9. Upload to YouTube
       # -------------------------------------------------
       - name: Upload to YouTube
         run: |
@@ -135,50 +134,39 @@ jobs:
 
           const title = basic.title || "AI Generated Video";
           const description = basic.description || "Generated automatically.";
+          const tags = Array.isArray(basic.tags)
+            ? basic.tags.filter(t => typeof t === "string" && t.trim() !== "")
+            : [];
 
-          let tags = Array.isArray(basic.tags) ? basic.tags : [];
+          console.log("Uploading to YouTube…");
+          console.log("Title:", title);
+          console.log("Tags:", tags);
 
-          // Clean tags to prevent INVALID TAGS error
-          tags = tags
-            .map(t => String(t).trim())
-            .filter(t => t.length > 0)
-            .filter(t => !t.includes(","))
-            .filter(t => /^[a-zA-Z0-9 _-]+$/.test(t))
-            .slice(0, 20);
-
-          console.log("Sanitized Tags:", tags);
-
-          const oauth = new google.auth.OAuth2(
+          const oauth2Client = new google.auth.OAuth2(
             process.env.YT_CLIENT_ID,
             process.env.YT_CLIENT_SECRET,
             process.env.YT_REDIRECT_URI
           );
 
-          oauth.setCredentials({
-            refresh_token: process.env.YT_REFRESH_TOKEN
+          oauth2Client.setCredentials({
+            refresh_token: process.env.YT_REFRESH_TOKEN,
           });
 
           const youtube = google.youtube({
             version: "v3",
-            auth: oauth
+            auth: oauth2Client
           });
 
-          async function upload() {
-            const res = await youtube.videos.insert({
-              part: "snippet,status",
-              requestBody: {
-                snippet: { title, description, tags },
-                status: { privacyStatus: "public" }
-              },
-              media: {
-                body: fs.createReadStream("out/video.mp4")
-              }
-            });
+          const res = await youtube.videos.insert({
+            part: "snippet,status",
+            requestBody: {
+              snippet: { title, description, tags },
+              status: { privacyStatus: "public" }
+            },
+            media: { body: fs.createReadStream("out/video.mp4") }
+          });
 
-            console.log("🎉 Uploaded to YouTube! Video ID:", res.data.id);
-          }
-
-          upload();
+          console.log("🎉 Uploaded to YouTube! Video ID:", res.data.id);
           EOF
         env:
           YT_CLIENT_ID: ${{ secrets.YT_CLIENT_ID }}
