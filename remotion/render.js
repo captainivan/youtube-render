@@ -1,37 +1,37 @@
+// remotion/render.js
+
 import { renderMedia, selectComposition } from "@remotion/renderer";
 import path from "path";
-import url from "url";
 
+// Payload from GitHub Action
 const payload = JSON.parse(process.argv[2]);
 
-// Get absolute path of this directory
-const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
-
-// Path to Root.jsx
-const entry = path.join(__dirname, "Root.jsx");
+// 🔥 Replace this with your deployed Remotion app URL
+const serveUrl = "https://youtube-render.vercel.app";
 
 console.log("Rendering with payload:", payload);
+console.log("Using serveUrl:", serveUrl);
 
 (async () => {
-  // 1. Load compositions from Root.jsx
-  const comps = await selectComposition({
-    serveUrl: entry,
-    id: "Video",
+  // 1. Select composition from deployed URL
+  const composition = await selectComposition({
+    serveUrl,
+    id: "Video",          // ← must match Composition ID in Root.jsx
     inputProps: payload,
   });
 
-  if (!comps) {
-    throw new Error("❌ Composition 'Video' not found!");
+  if (!composition) {
+    throw new Error("❌ Composition 'Video' not found in deployed Remotion app");
   }
 
-  // 2. Render to video
+  // 2. Render the video remotely
   await renderMedia({
-    composition: comps,
-    serveUrl: entry,
+    serveUrl,
+    composition,
     codec: "h264",
     outputLocation: "final.mp4",
     inputProps: payload,
   });
 
-  console.log("✅ Render complete: final.mp4");
+  console.log("✅ Render complete → final.mp4");
 })();
