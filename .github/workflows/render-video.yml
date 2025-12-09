@@ -25,13 +25,13 @@ jobs:
           node-version: 20
 
       # -------------------------------------------------
-      # 3. Install project dependencies
+      # 3. Install dependencies
       # -------------------------------------------------
       - name: Install dependencies
         run: npm install
 
       # -------------------------------------------------
-      # 4. Extract props cleanly
+      # 4. Prepare props safely
       # -------------------------------------------------
       - name: Prepare props
         id: props
@@ -60,7 +60,7 @@ jobs:
           cat basicData.json
 
       # -------------------------------------------------
-      # 6. Calculate Audio Duration (FIXED: Download First)
+      # 6. Calculate Audio Duration (download first)
       # -------------------------------------------------
       - name: Calculate Audio Duration
         run: |
@@ -87,7 +87,10 @@ jobs:
           console.log("🎵 Audio Seconds:", seconds);
           console.log("🎞 Frames:", durationInFrames);
 
-          fs.writeFileSync("duration.json", JSON.stringify({ durationInFrames, fps }));
+          fs.writeFileSync(
+            "duration.json",
+            JSON.stringify({ durationInFrames, fps })
+          );
           EOF
 
       - name: Show Duration
@@ -111,7 +114,7 @@ jobs:
             --output out/video.mp4
 
       # -------------------------------------------------
-      # 8. Upload rendered video as GitHub artifact
+      # 8. Upload as GitHub artifact
       # -------------------------------------------------
       - name: Upload final video
         uses: actions/upload-artifact@v4
@@ -120,7 +123,7 @@ jobs:
           path: out/video.mp4
 
       # -------------------------------------------------
-      # 9. Upload to YouTube
+      # 9. Upload to YouTube (NO TAGS)
       # -------------------------------------------------
       - name: Upload to YouTube
         run: |
@@ -134,22 +137,17 @@ jobs:
 
           const title = basic.title || "AI Generated Video";
           const description = basic.description || "Generated automatically.";
-          const tags = Array.isArray(basic.tags)
-            ? basic.tags.filter(t => typeof t === "string" && t.trim() !== "")
-            : [];
 
           console.log("Uploading to YouTube…");
           console.log("Title:", title);
-          console.log("Tags:", tags);
 
           const oauth2Client = new google.auth.OAuth2(
             process.env.YT_CLIENT_ID,
-            process.env.YT_CLIENT_SECRET,
-            process.env.YT_REDIRECT_URI
+            process.env.YT_CLIENT_SECRET
           );
 
           oauth2Client.setCredentials({
-            refresh_token: process.env.YT_REFRESH_TOKEN,
+            refresh_token: process.env.YT_REFRESH_TOKEN
           });
 
           const youtube = google.youtube({
@@ -160,10 +158,12 @@ jobs:
           const res = await youtube.videos.insert({
             part: "snippet,status",
             requestBody: {
-              snippet: { title, description, tags },
+              snippet: { title, description },
               status: { privacyStatus: "public" }
             },
-            media: { body: fs.createReadStream("out/video.mp4") }
+            media: {
+              body: fs.createReadStream("out/video.mp4")
+            }
           });
 
           console.log("🎉 Uploaded to YouTube! Video ID:", res.data.id);
@@ -172,4 +172,3 @@ jobs:
           YT_CLIENT_ID: ${{ secrets.YT_CLIENT_ID }}
           YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
           YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
-          YT_REDIRECT_URI: ${{ secrets.YT_REDIRECT_URI }}
