@@ -12,7 +12,7 @@ export async function GET() {
   
       // --- 2. SEND TO GITHUB ACTION (repository_dispatch) ---
       const res = await fetch(
-        "https://github.com/captainivan/youtube-render/dispatches",
+        "https://api.github.com/repos/captainivan/youtube-render/dispatches",
         {
           method: "POST",
           headers: {
