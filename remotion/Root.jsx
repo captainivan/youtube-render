@@ -1,21 +1,17 @@
-// remotion-app/src/Root.jsx
-
 import { Composition } from "remotion";
-import Video from "./Video"; 
+import Video from "./Video";
 
-const RemotionRoot = () => {
+export default function RemotionRoot() {
   return (
     <>
       <Composition
-        id="Video"       
+        id="FinalVideo"
         component={Video}
+        durationInFrames={1500}
         fps={30}
         width={1080}
         height={1920}
-        durationInFrames={1500}
       />
     </>
   );
-};
-
-export default RemotionRoot;
+}
