@@ -3,11 +3,11 @@ export async function GET() {
     // --- 1. DEMO PAYLOAD (fake test data) ---
     const payload = {
       id: "demo-123",
-      bgImage: "https://i.pinimg.com/1200x/38/99/00/389900dd859b26489093fb2df80cebf3.jpg",
-      audio: "https://www.learningcontainer.com/wp-content/uploads/2020/02/Kalimba.mp3",
-      subtitles: "https://microsoftedge.github.io/Demos/json-dummy-data/64KB.json",
-      basicData: "https://microsoftedge.github.io/Demos/json-dummy-data/64KB.json",
-      thumbnail: "https://in.pinterest.com/pin/526850856430464001/"
+      bgImage: "https://shunyasongs.vercel.app/tmp/bgImage.png",
+      audio: "https://shunyasongs.vercel.app/tmp/audio.mp4",
+      subtitles: "https://shunyasongs.vercel.app/tmp/subtitles.json",
+      basicData: "https://shunyasongs.vercel.app/tmp/basicData.json",
+      thumbnail: "https://shunyasongs.vercel.app/tmp/thumbnail.png"
     };
 
     // --- 2. SEND TO GITHUB ACTION ---

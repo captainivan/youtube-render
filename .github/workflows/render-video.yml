@@ -1,6 +1,7 @@
-name: Render Remotion Video
+name: Render Video Dynamic Duration + YouTube Upload
 
 on:
+  workflow_dispatch: {}
   repository_dispatch:
     types: [run_video_render]
 
@@ -9,40 +10,169 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout Repo
-        uses: actions/checkout@v3
+      # ----------------------------------------
+      # 1. Checkout repository
+      # ----------------------------------------
+      - name: Checkout repo
+        uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v3
+      # ----------------------------------------
+      # 2. Setup Node.js
+      # ----------------------------------------
+      - name: Setup Node
+        uses: actions/setup-node@v4
         with:
           node-version: 20
 
-      - name: Install Dependencies
+      # ----------------------------------------
+      # 3. Install dependencies
+      # ----------------------------------------
+      - name: Install dependencies
         run: npm install
 
-      - name: Debug Payload
+      # ----------------------------------------
+      # 4. Capture props sent from Next.js
+      # ----------------------------------------
+      - name: Prepare props
+        id: props
         run: |
-          echo "RAW PAYLOAD:"
-          echo '${{ toJson(github.event.client_payload) }}'
+          echo "props=$(echo '${{ toJson(github.event.client_payload) }}')" >> $GITHUB_OUTPUT
 
-      # ⭐ FIXED STEP
-      - name: Prepare Props JSON
-        id: prep
+      - name: Show props
         run: |
-          JSON=$(echo '${{ toJson(github.event.client_payload.props) }}' | jq -c '.')
-          echo "props=$JSON" >> $GITHUB_OUTPUT
+          echo "Received Props:"
+          echo '${{ steps.props.outputs.props }}'
 
-      - name: Render FinalVideo
+      # ----------------------------------------
+      # 5. Download AI basicData.json
+      # ----------------------------------------
+      - name: Download basic data
         run: |
-          echo "Rendering with props:"
-          echo '${{ steps.prep.outputs.props }}'
+          BASIC_URL=$(echo '${{ steps.props.outputs.props }}' | jq -r '.basicDataUrl')
+          echo "Downloading basicData.json from: $BASIC_URL"
+          curl -L -o basicData.json "$BASIC_URL"
+          echo "Downloaded basicData.json:"
+          cat basicData.json
+
+      # ----------------------------------------
+      # 6. Calculate dynamic audio duration
+      # ----------------------------------------
+      - name: Calculate audio duration
+        run: |
+          npm install get-audio-duration
+
+          node << 'EOF'
+          import fs from "fs";
+          import { getAudioDurationInSeconds } from "get-audio-duration";
+
+          const props = JSON.parse('${{ steps.props.outputs.props }}');
+          const audioUrl = props.audioUrl;
+
+          if (!audioUrl) {
+            console.error("❌ audioUrl missing in props!");
+            process.exit(1);
+          }
+
+          console.log("Fetching audio:", audioUrl);
+
+          const seconds = await getAudioDurationInSeconds(audioUrl);
+          const fps = 30;
+          const durationInFrames = Math.ceil(seconds * fps);
+
+          console.log("🎵 Audio seconds:", seconds);
+          console.log("🎞 Duration frames:", durationInFrames);
+
+          fs.writeFileSync(
+            "duration.json",
+            JSON.stringify({ durationInFrames, fps })
+          );
+          EOF
+
+      - name: Show duration.json
+        run: cat duration.json
+
+      # ----------------------------------------
+      # 7. Render Remotion video using dynamic duration
+      # ----------------------------------------
+      - name: Render video
+        run: |
+          PROPS='${{ steps.props.outputs.props }}'
+          DURATION=$(cat duration.json)
+
+          FINAL_PROPS=$(jq -n --argjson a "$PROPS" --argjson b "$DURATION" '$a + $b')
+
+          echo "Merged FINAL PROPS:"
+          echo "$FINAL_PROPS"
 
           npx remotion render remotion/index.js FinalVideo \
-            --props '${{ steps.prep.outputs.props }}' \
+            --props "$FINAL_PROPS" \
             --output out/video.mp4
 
-      - name: Upload Rendered Video
+      # ----------------------------------------
+      # 8. Upload rendered video (optional)
+      # ----------------------------------------
+      - name: Upload rendered video
         uses: actions/upload-artifact@v4
         with:
           name: final-video
           path: out/video.mp4
+
+      # ----------------------------------------
+      # 9. Upload to YouTube using AI basicData.json
+      # ----------------------------------------
+      - name: Upload to YouTube
+        run: |
+          npm install googleapis
+
+          node << 'EOF'
+          import fs from "fs";
+          import { google } from "googleapis";
+
+          const basic = JSON.parse(fs.readFileSync("basicData.json", "utf8"));
+
+          const title = basic.title || "AI Generated Video";
+          const description = basic.desc || "Generated using AI automation.";
+          const tags = basic.tags || ["AI", "automation", "remotion"];
+
+          console.log("📤 Uploading to YouTube...");
+          console.log("Title:", title);
+          console.log("Tags:", tags);
+
+          const OAuth2 = google.auth.OAuth2;
+
+          const client = new OAuth2(
+            process.env.YT_CLIENT_ID,
+            process.env.YT_CLIENT_SECRET,
+            "urn:ietf:wg:oauth:2.0:oob"
+          );
+
+          client.setCredentials({
+            refresh_token: process.env.YT_REFRESH_TOKEN
+          });
+
+          const youtube = google.youtube({
+            version: "v3",
+            auth: client
+          });
+
+          async function upload() {
+            const res = await youtube.videos.insert({
+              part: "snippet,status",
+              requestBody: {
+                snippet: { title, description, tags },
+                status: { privacyStatus: "public" }
+              },
+              media: {
+                body: fs.createReadStream("out/video.mp4")
+              }
+            });
+
+            console.log("🎉 Video uploaded! ID:", res.data.id);
+          }
+
+          upload();
+          EOF
+        env:
+          YT_CLIENT_ID: ${{ secrets.YT_CLIENT_ID }}
+          YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
+          YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
