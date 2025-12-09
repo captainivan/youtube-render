@@ -1,19 +1,44 @@
-name: Render Video
+name: Render Remotion Video
 
 on:
+  # Manual test run
   workflow_dispatch:
+    inputs:
+      bgUrl:
+        description: "Background Image URL"
+        required: true
+        type: string
+      audioUrl:
+        description: "Audio URL"
+        required: true
+        type: string
+      thumbnailUrl:
+        description: "Thumbnail URL"
+        required: true
+        type: string
+      basicDataUrl:
+        description: "Basic Data JSON URL"
+        required: true
+        type: string
+      subtitlesUrl:
+        description: "Subtitles JSON URL"
+        required: true
+        type: string
+
+  # Auto-trigger from Next.js
   repository_dispatch:
     types: [run_video_render]
 
 jobs:
   render:
     runs-on: ubuntu-latest
+    timeout-minutes: 40
 
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v3
 
-      - name: Setup Node
+      - name: Setup Node.js
         uses: actions/setup-node@v3
         with:
           node-version: 20
@@ -21,15 +46,55 @@ jobs:
       - name: Install Dependencies
         run: npm install
 
-      - name: Render Remotion Video
+      # Debug event payload (optional, but helpful)
+      - name: Debug Payload
         run: |
-          echo "Props: ${{ github.event.client_payload.props }}"
-          npx remotion render remotion/index.js FinalVideo \
-            --props '${{ github.event.client_payload.props }}' \
-            --output=out/video.mp4
+          echo "EVENT PAYLOAD RAW:"
+          echo '${{ toJson(github.event) }}'
 
-      - name: Upload Artifact
+      # Convert props to REAL JSON (fixes 'Object' bug)
+      - name: Prepare props JSON
+        id: prepare_props
+        run: |
+          if [ "${{ github.event_name }}" = "repository_dispatch" ]; then
+            echo "📦 Using repository_dispatch payload"
+            JSON=$(echo '${{ toJson(github.event.client_payload.props) }}')
+            echo "props=$JSON" >> $GITHUB_OUTPUT
+          else
+            echo "🧩 Using manual workflow inputs"
+
+            PROPS_JSON=$(jq -n \
+              --arg bg "${{ inputs.bgUrl }}" \
+              --arg audio "${{ inputs.audioUrl }}" \
+              --arg thumb "${{ inputs.thumbnailUrl }}" \
+              --arg basic "${{ inputs.basicDataUrl }}" \
+              --arg subs "${{ inputs.subtitlesUrl }}" \
+              '{bgUrl: $bg, audioUrl: $audio, thumbnailUrl: $thumb, basicDataUrl: $basic, subtitlesUrl: $subs}')
+
+            echo "props=$PROPS_JSON" >> $GITHUB_OUTPUT
+          fi
+
+      # 🎬 Render FinalVideo using Remotion
+      - name: Render Video
+        run: |
+          echo "🎬 Rendering with props:"
+          echo '${{ steps.prepare_props.outputs.props }}'
+
+          npx remotion render remotion/index.js FinalVideo \
+            --props '${{ steps.prepare_props.outputs.props }}' \
+            --output out/video.mp4
+
+      # Upload output
+      - name: Upload Rendered Video
         uses: actions/upload-artifact@v4
         with:
           name: final-video
           path: out/video.mp4
+
+      # Notify Next.js backend (optional)
+      - name: Notify Next.js
+        run: |
+          curl -X POST "${{ secrets.BASE_URL }}/api/github/render-complete" \
+            -H "Content-Type: application/json" \
+            -H "x-render-callback-secret: ${{ secrets.RENDER_CALLBACK_SECRET }}" \
+            --data "{\"run_id\":\"${{ github.run_id }}\", \"status\":\"completed\"}"
