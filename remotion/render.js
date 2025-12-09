@@ -1,30 +1,37 @@
-import { bundle, renderMedia } from "@remotion/renderer";
+import { renderMedia, selectComposition } from "@remotion/renderer";
 import path from "path";
-import fs from "fs";
+import url from "url";
 
 const payload = JSON.parse(process.argv[2]);
 
+// Get absolute path of this directory
+const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
+
+// Path to Root.jsx
+const entry = path.join(__dirname, "Root.jsx");
+
+console.log("Rendering with payload:", payload);
+
 (async () => {
-  console.log("Payload received:", payload);
-
-  // 1. Bundle your Remotion project
-  const bundleLocation = await bundle({
-    entryPoint: path.join(process.cwd(), "remotion", "Root.jsx"),
-    webpackOverride: (config) => config,
+  // 1. Load compositions from Root.jsx
+  const comps = await selectComposition({
+    serveUrl: entry,
+    id: "Video",
+    inputProps: payload,
   });
 
-  console.log("Bundled at:", bundleLocation);
+  if (!comps) {
+    throw new Error("❌ Composition 'Video' not found!");
+  }
 
-  // 2. Render video
-  const output = "final.mp4";
-
+  // 2. Render to video
   await renderMedia({
-    composition: "Video",
-    serveUrl: bundleLocation,
+    composition: comps,
+    serveUrl: entry,
     codec: "h264",
-    outputLocation: output,
-    inputProps: payload, // ⭐ Sending your Firebase URLs and metadata into Remotion
+    outputLocation: "final.mp4",
+    inputProps: payload,
   });
 
-  console.log("Render done:", output);
+  console.log("✅ Render complete: final.mp4");
 })();
