@@ -1,5 +1,5 @@
 import { Composition } from "remotion";
-import Video from "./Video";
+import Video from "./Video.jsx";
 
 export default function RemotionRoot() {
   return (
