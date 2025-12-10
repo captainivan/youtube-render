@@ -106,7 +106,7 @@ export const Video = ({ bgImage, audio, subtitles }) => {
               <div
                 style={{
                   position: "absolute",
-                  bottom: "40%",
+                  bottom: "50%",
                   width: "100%",
                   textAlign: "center",
                   fontSize: 70,
