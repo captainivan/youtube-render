@@ -9,15 +9,16 @@
     "start": "next start"
   },
   "dependencies": {
-    "@remotion/cli": "4.0.383",
     "@remotion/bundler": "4.0.383",
+    "@remotion/cli": "4.0.383",
     "@remotion/compositor-linux-x64-gnu": "4.0.383",
     "@remotion/media-utils": "4.0.383",
     "@remotion/renderer": "4.0.383",
-    "remotion": "4.0.383",
+    "imagekit": "^6.0.0",
     "next": "16.0.7",
     "react": "19.2.0",
-    "react-dom": "19.2.0"
+    "react-dom": "19.2.0",
+    "remotion": "4.0.383"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

@@ -2,11 +2,11 @@ export async function GET() {
   try {
     const payload = {
       id: "demo-123",
-      bgImage: "https://shunyasongs.vercel.app/tmp/bgImage.png",
-      audio: "https://shunyasongs.vercel.app/tmp/audio.mp4",
-      subtitles: "https://shunyasongs.vercel.app/tmp/subtitles.json",
-      basicData: "https://shunyasongs.vercel.app/tmp/basicData.json",
-      thumbnail: "https://shunyasongs.vercel.app/tmp/thumbnail.png"
+      bgImage: `https://ik.imagekit.io/lunarivanfiles/bgImage.jpg?updatedAt=${Date.now()}`,
+      audio: `https://ik.imagekit.io/lunarivanfiles/audio.mp3?updatedAt=${Date.now()}`,
+      subtitles: `https://ik.imagekit.io/lunarivanfiles/subtitles.json?updatedAt=${Date.now()}`,
+      basicData: `https://ik.imagekit.io/lunarivanfiles/basicData.json?updatedAt=${Date.now()}`,
+      thumbnail: `https://ik.imagekit.io/lunarivanfiles/thumbnail.jpg?updatedAt=${Date.now()}`
     };
 
     const res = await fetch(
