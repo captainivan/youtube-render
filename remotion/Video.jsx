@@ -1,4 +1,3 @@
-// Video.jsx (SERVER COMPONENT — DO NOT ADD "use client")
 import "./remotion.css";
 import React from "react";
 import {
@@ -10,19 +9,13 @@ import {
   useVideoConfig,
 } from "remotion";
 
-export const Video = async ({
-  bgImage,
-  audio,
-  subtitles,
-}) => {
-  // Load subtitles on server
+export const Video = async ({ bgImage, audio, subtitles }) => {
   const json = await fetch(subtitles).then((r) => r.json());
   const words = json.words || [];
 
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
 
-  // Clean words
   const cleaned = words
     .filter((w) => w.type === "word")
     .map((w) => ({
@@ -33,7 +26,6 @@ export const Video = async ({
 
   if (cleaned.length === 0) return null;
 
-  // Chunk into groups of 5
   function chunkWords(list, size = 5) {
     const chunks = [];
     for (let i = 0; i < list.length; i += size) {
@@ -49,11 +41,9 @@ export const Video = async ({
 
   let chunks = chunkWords(cleaned);
 
-  // Auto line break
   function splitLines(text) {
     const arr = text.split(" ");
     if (arr.length <= 2) return text;
-
     const mid = Math.ceil(arr.length / 2);
     return arr.slice(0, mid).join(" ") + "<br/>" + arr.slice(mid).join(" ");
   }
@@ -63,14 +53,12 @@ export const Video = async ({
     finalText: c.text.length > 20 ? splitLines(c.text) : c.text,
   }));
 
-  // Hold until next
   for (let i = 0; i < chunks.length - 1; i++) {
     chunks[i].end = chunks[i + 1].start;
   }
 
   const finalSubs = chunks;
 
-  // Background zoom
   const zoomScale = 1 + frame / (fps * 1500);
 
   return (
