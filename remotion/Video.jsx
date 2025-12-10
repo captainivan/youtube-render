@@ -106,10 +106,10 @@ export const Video = ({ bgImage, audio, subtitles }) => {
               <div
                 style={{
                   position: "absolute",
-                  bottom: "50%",
+                  bottom: "40%",
                   width: "100%",
                   textAlign: "center",
-                  fontSize: 70,
+                  fontSize: 80,
                   fontFamily: "MyFont",
                   color: "white",
                   WebkitTextStroke: "3px black",
