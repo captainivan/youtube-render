@@ -31,7 +31,7 @@ jobs:
         run: npm install
 
       # -------------------------------------------------
-      # 4. Prepare props safely
+      # 4. Prepare props (URLs only at this stage)
       # -------------------------------------------------
       - name: Prepare props
         id: props
@@ -52,7 +52,7 @@ jobs:
       # -------------------------------------------------
       # 5. Download basicData.json
       # -------------------------------------------------
-      - name: Download basic data
+      - name: Download basicData.json
         run: |
           BASIC_URL=$(echo '${{ steps.props.outputs.props }}' | jq -r '.basicData')
           echo "Downloading basicData.json: $BASIC_URL"
@@ -60,7 +60,17 @@ jobs:
           cat basicData.json
 
       # -------------------------------------------------
-      # 6. Calculate Audio Duration (download first)
+      # 6. Download subtitles.json (IMPORTANT FIX)
+      # -------------------------------------------------
+      - name: Download subtitles.json
+        run: |
+          SUB_URL=$(echo '${{ steps.props.outputs.props }}' | jq -r '.subtitles')
+          echo "Downloading subtitles.json: $SUB_URL"
+          curl -L -o subtitles.json "$SUB_URL"
+          cat subtitles.json
+
+      # -------------------------------------------------
+      # 7. Calculate Audio Duration (download audio first)
       # -------------------------------------------------
       - name: Calculate Audio Duration
         run: |
@@ -97,33 +107,46 @@ jobs:
         run: cat duration.json
 
       # -------------------------------------------------
-      # 7. Render Remotion Video
+      # 8. Merge ALL props into FINAL_PROPS
       # -------------------------------------------------
-      - name: Render Video
+      - name: Build Final Props
+        id: finalprops
         run: |
           PROPS='${{ steps.props.outputs.props }}'
           DURATION=$(cat duration.json)
+          SUBS=$(cat subtitles.json)
 
-          FINAL_PROPS=$(jq -n --argjson a "$PROPS" --argjson b "$DURATION" '$a + $b')
+          FINAL_PROPS=$(jq -n \
+            --argjson a "$PROPS" \
+            --argjson b "$DURATION" \
+            --argjson subs "$SUBS" \
+            '$a + $b + {subtitles: $subs}')
 
-          echo "FINAL PROPS:"
-          echo "$FINAL_PROPS"
+          echo "FINAL_PROPS=$FINAL_PROPS" >> $GITHUB_OUTPUT
 
+      - name: Show Final Props
+        run: echo '${{ steps.finalprops.outputs.FINAL_PROPS }}'
+
+      # -------------------------------------------------
+      # 9. Render Remotion Video
+      # -------------------------------------------------
+      - name: Render Video
+        run: |
           npx remotion render remotion/index.js FinalVideo \
-            --props "$FINAL_PROPS" \
+            --props '${{ steps.finalprops.outputs.FINAL_PROPS }}' \
             --output out/video.mp4
 
       # -------------------------------------------------
-      # 8. Upload as GitHub artifact
+      # 10. Upload video artifact
       # -------------------------------------------------
-      - name: Upload final video
+      - name: Upload Final Video
         uses: actions/upload-artifact@v4
         with:
           name: final-video
           path: out/video.mp4
 
       # -------------------------------------------------
-      # 9. Upload to YouTube (NO TAGS)
+      # 11. Upload to YouTube (NO TAGS)
       # -------------------------------------------------
       - name: Upload to YouTube
         run: |

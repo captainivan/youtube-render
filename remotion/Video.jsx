@@ -1,3 +1,4 @@
+
 import "./remotion.css";
 import React from "react";
 import {
@@ -9,13 +10,13 @@ import {
   useVideoConfig,
 } from "remotion";
 
-export const Video = async ({ bgImage, audio, subtitles }) => {
-  const json = await fetch(subtitles).then((r) => r.json());
-  const words = json.words || [];
+export const Video = ({ bgImage, audio, subtitles }) => {
+  const words = subtitles?.words || [];
 
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
 
+  // Clean words
   const cleaned = words
     .filter((w) => w.type === "word")
     .map((w) => ({
@@ -24,8 +25,9 @@ export const Video = async ({ bgImage, audio, subtitles }) => {
       end: w.end === w.start ? (w.start + 0.2) * 1000 : w.end * 1000,
     }));
 
-  if (cleaned.length === 0) return null;
+  if (!cleaned.length) return null;
 
+  // Chunk into max 5 words
   function chunkWords(list, size = 5) {
     const chunks = [];
     for (let i = 0; i < list.length; i += size) {
@@ -41,6 +43,7 @@ export const Video = async ({ bgImage, audio, subtitles }) => {
 
   let chunks = chunkWords(cleaned);
 
+  // Auto line break
   function splitLines(text) {
     const arr = text.split(" ");
     if (arr.length <= 2) return text;
@@ -53,12 +56,14 @@ export const Video = async ({ bgImage, audio, subtitles }) => {
     finalText: c.text.length > 20 ? splitLines(c.text) : c.text,
   }));
 
+  // Hold until next subtitle
   for (let i = 0; i < chunks.length - 1; i++) {
     chunks[i].end = chunks[i + 1].start;
   }
 
   const finalSubs = chunks;
 
+  // Background zoom
   const zoomScale = 1 + frame / (fps * 1500);
 
   return (
@@ -127,7 +132,9 @@ export const Video = async ({ bgImage, audio, subtitles }) => {
                   opacity,
                   transform: `translateY(${slide}px) scale(${scale})`,
                 }}
-                dangerouslySetInnerHTML={{ __html: s.finalText.toUpperCase() }}
+                dangerouslySetInnerHTML={{
+                  __html: s.finalText.toUpperCase(),
+                }}
               />
             </Sequence>
           );
