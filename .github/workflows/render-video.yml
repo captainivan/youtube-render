@@ -136,7 +136,7 @@ jobs:
           const basic = JSON.parse(fs.readFileSync("basicData.json"));
 
           const title = basic.title || "AI Generated Video";
-          const description = basic.description || "Generated automatically.";
+          const description = basic.desc || "Generated automatically.";
 
           console.log("Uploading to YouTube…");
           console.log("Title:", title);

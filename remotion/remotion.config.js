@@ -1,4 +1,3 @@
-// remotion-app/remotion.config.js
 
 import { Config } from "@remotion/cli/config";
 

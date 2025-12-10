@@ -1,25 +1,150 @@
+// Video.jsx (SERVER COMPONENT — DO NOT ADD "use client")
+import "./remotion.css";
 import React from "react";
-import { AbsoluteFill, Audio, Img, Sequence } from "remotion";
+import {
+  useCurrentFrame,
+  Sequence,
+  Img,
+  AbsoluteFill,
+  Html5Audio,
+  useVideoConfig,
+} from "remotion";
 
-export const Video = ({ bgImage, audio, subtitles, basicData, thumbnail }) => {
+export const Video = async ({
+  bgImage,
+  audio,
+  subtitles,
+}) => {
+  // Load subtitles on server
+  const json = await fetch(subtitles).then((r) => r.json());
+  const words = json.words || [];
+
+  const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
+
+  // Clean words
+  const cleaned = words
+    .filter((w) => w.type === "word")
+    .map((w) => ({
+      text: w.text.trim(),
+      start: w.start * 1000,
+      end: w.end === w.start ? (w.start + 0.2) * 1000 : w.end * 1000,
+    }));
+
+  if (cleaned.length === 0) return null;
+
+  // Chunk into groups of 5
+  function chunkWords(list, size = 5) {
+    const chunks = [];
+    for (let i = 0; i < list.length; i += size) {
+      const slice = list.slice(i, i + size);
+      chunks.push({
+        text: slice.map((w) => w.text).join(" "),
+        start: slice[0].start,
+        end: slice[slice.length - 1].end,
+      });
+    }
+    return chunks;
+  }
+
+  let chunks = chunkWords(cleaned);
+
+  // Auto line break
+  function splitLines(text) {
+    const arr = text.split(" ");
+    if (arr.length <= 2) return text;
+
+    const mid = Math.ceil(arr.length / 2);
+    return arr.slice(0, mid).join(" ") + "<br/>" + arr.slice(mid).join(" ");
+  }
+
+  chunks = chunks.map((c) => ({
+    ...c,
+    finalText: c.text.length > 20 ? splitLines(c.text) : c.text,
+  }));
+
+  // Hold until next
+  for (let i = 0; i < chunks.length - 1; i++) {
+    chunks[i].end = chunks[i + 1].start;
+  }
+
+  const finalSubs = chunks;
+
+  // Background zoom
+  const zoomScale = 1 + frame / (fps * 1500);
+
   return (
-    <AbsoluteFill style={{ backgroundColor: "black" }}>
-      {/* Background image */}
-      <Img src={bgImage} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+    <AbsoluteFill>
+      <Img
+        src={bgImage}
+        style={{
+          width: "100%",
+          height: "100%",
+          objectFit: "cover",
+          transform: `scale(${zoomScale})`,
+        }}
+      />
 
-      {/* Audio */}
-      <Audio src={audio} />
+      <Html5Audio src={audio} />
 
-      {/* Example text */}
-      <Sequence from={10} durationInFrames={150}>
-        <h1 style={{
-          color: "white",
-          fontSize: "50px",
-          textAlign: "center"
-        }}>
-          {basicData?.title || "Your AI Title"}
-        </h1>
-      </Sequence>
+      <AbsoluteFill style={{ zIndex: 10 }}>
+        {finalSubs.map((s, i) => {
+          const start = s.start / 1000;
+          const end = s.end / 1000;
+
+          const from = Math.floor(start * fps);
+          const to = Math.floor(end * fps);
+          const duration = Math.max(to - from, 1);
+
+          const elapsed = frame - from;
+
+          const appear = Math.min(1, elapsed / (fps * 0.35));
+          const disappear = Math.min(1, (to - frame) / (fps * 0.35));
+
+          const fadeIn = appear ** 1.7;
+          const fadeOut = disappear ** 1.7;
+          const opacity = fadeIn * fadeOut;
+
+          const slide = (1 - fadeIn) * 15;
+          const scale = 1 + (1 - fadeIn) * 0.08;
+
+          return (
+            <Sequence key={i} from={from} durationInFrames={duration}>
+              <div
+                style={{
+                  position: "absolute",
+                  bottom: "41%",
+                  left: "50%",
+                  transform: "translateX(-50%)",
+                  width: "75%",
+                  height: s.finalText.includes("<br/>") ? "100px" : "68px",
+                  background: "rgba(0,0,0,0.25)",
+                  filter: "blur(10px)",
+                  borderRadius: "15px",
+                  opacity,
+                }}
+              />
+
+              <div
+                style={{
+                  position: "absolute",
+                  bottom: "40%",
+                  width: "100%",
+                  textAlign: "center",
+                  fontSize: 45,
+                  fontFamily: "MyFont",
+                  color: "white",
+                  WebkitTextStroke: "3px black",
+                  textShadow: "0 0 10px rgba(0,0,0,0.8)",
+                  opacity,
+                  transform: `translateY(${slide}px) scale(${scale})`,
+                }}
+                dangerouslySetInnerHTML={{ __html: s.finalText.toUpperCase() }}
+              />
+            </Sequence>
+          );
+        })}
+      </AbsoluteFill>
     </AbsoluteFill>
   );
 };
