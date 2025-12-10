@@ -1,4 +1,4 @@
-name: Render Video + Dynamic Duration + YouTube Upload
+name: Render Video 
 
 on:
   workflow_dispatch: {}
@@ -31,12 +31,12 @@ jobs:
         run: npm install
 
       # -------------------------------------------------
-      # 4. Prepare props (URLs only at this stage)
+      # 4. Prepare basic props
       # -------------------------------------------------
-      - name: Prepare props
-        id: props
+      - name: Prepare raw props
+        id: raw_props
         run: |
-          JSON=$(printf '%s' \
+          RAW=$(printf '%s' \
           "{\"audio\":\"${{ github.event.client_payload.audio }}\",\
           \"basicData\":\"${{ github.event.client_payload.basicData }}\",\
           \"bgImage\":\"${{ github.event.client_payload.bgImage }}\",\
@@ -44,39 +44,39 @@ jobs:
           \"subtitles\":\"${{ github.event.client_payload.subtitles }}\",\
           \"thumbnail\":\"${{ github.event.client_payload.thumbnail }}\"}")
 
-          echo "props=$JSON" >> $GITHUB_OUTPUT
+          echo "props=$RAW" >> $GITHUB_OUTPUT
 
-      - name: Show Props
-        run: echo '${{ steps.props.outputs.props }}'
+      - name: Show Raw Props
+        run: echo '${{ steps.raw_props.outputs.props }}'
 
       # -------------------------------------------------
       # 5. Download basicData.json
       # -------------------------------------------------
-      - name: Download basicData.json
+      - name: Download basic data
         run: |
-          BASIC_URL=$(echo '${{ steps.props.outputs.props }}' | jq -r '.basicData')
+          BASIC_URL=$(echo '${{ steps.raw_props.outputs.props }}' | jq -r '.basicData')
           echo "Downloading basicData.json: $BASIC_URL"
           curl -L -o basicData.json "$BASIC_URL"
           cat basicData.json
 
       # -------------------------------------------------
-      # 6. Download subtitles.json (IMPORTANT FIX)
+      # 6. Download subtitles.json to avoid client fetch delays
       # -------------------------------------------------
-      - name: Download subtitles.json
+      - name: Download subtitles
         run: |
-          SUB_URL=$(echo '${{ steps.props.outputs.props }}' | jq -r '.subtitles')
+          SUB_URL=$(echo '${{ steps.raw_props.outputs.props }}' | jq -r '.subtitles')
           echo "Downloading subtitles.json: $SUB_URL"
           curl -L -o subtitles.json "$SUB_URL"
           cat subtitles.json
 
       # -------------------------------------------------
-      # 7. Calculate Audio Duration (download audio first)
+      # 7. Calculate audio duration
       # -------------------------------------------------
       - name: Calculate Audio Duration
         run: |
           npm install get-audio-duration
 
-          AUDIO_URL=$(echo '${{ steps.props.outputs.props }}' | jq -r '.audio')
+          AUDIO_URL=$(echo '${{ steps.raw_props.outputs.props }}' | jq -r '.audio')
           echo "Downloading audio file: $AUDIO_URL"
 
           curl -L -o audiofile.mp4 "$AUDIO_URL"
@@ -107,46 +107,49 @@ jobs:
         run: cat duration.json
 
       # -------------------------------------------------
-      # 8. Merge ALL props into FINAL_PROPS
+      # 8. Build FINAL PROPS safely (Base64 encoded)
       # -------------------------------------------------
-      - name: Build Final Props
-        id: finalprops
+      - name: Prepare final props
+        id: final_props
         run: |
-          PROPS='${{ steps.props.outputs.props }}'
+          PROPS='${{ steps.raw_props.outputs.props }}'
           DURATION=$(cat duration.json)
           SUBS=$(cat subtitles.json)
 
-          FINAL_PROPS=$(jq -n \
+          FINAL=$(jq -n \
             --argjson a "$PROPS" \
             --argjson b "$DURATION" \
             --argjson subs "$SUBS" \
             '$a + $b + {subtitles: $subs}')
 
-          echo "FINAL_PROPS=$FINAL_PROPS" >> $GITHUB_OUTPUT
+          echo "Final JSON Props:"
+          echo "$FINAL"
 
-      - name: Show Final Props
-        run: echo '${{ steps.finalprops.outputs.FINAL_PROPS }}'
+          ENCODED=$(echo "$FINAL" | base64 -w 0)
+          echo "props_b64=$ENCODED" >> $GITHUB_OUTPUT
 
       # -------------------------------------------------
-      # 9. Render Remotion Video
+      # 9. Render Remotion Video with decoded props
       # -------------------------------------------------
       - name: Render Video
         run: |
+          JSON=$(echo "${{ steps.final_props.outputs.props_b64 }}" | base64 --decode)
+
           npx remotion render remotion/index.js FinalVideo \
-            --props '${{ steps.finalprops.outputs.FINAL_PROPS }}' \
+            --props "$JSON" \
             --output out/video.mp4
 
       # -------------------------------------------------
       # 10. Upload video artifact
       # -------------------------------------------------
-      - name: Upload Final Video
+      - name: Upload final video
         uses: actions/upload-artifact@v4
         with:
           name: final-video
           path: out/video.mp4
 
       # -------------------------------------------------
-      # 11. Upload to YouTube (NO TAGS)
+      # 11. Upload to YouTube
       # -------------------------------------------------
       - name: Upload to YouTube
         run: |
