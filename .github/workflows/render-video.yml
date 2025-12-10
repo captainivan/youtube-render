@@ -1,4 +1,4 @@
-name: Render Video 
+name: Render Video
 
 on:
   workflow_dispatch: {}
@@ -146,27 +146,40 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: final-video
-          path: out/video.mp4
+          path:
+            out/video.mp4
 
       # -------------------------------------------------
-      # 11. Upload to YouTube
+      # 11. Upload to YouTube (Uses Final Props Thumbnail)
       # -------------------------------------------------
       - name: Upload to YouTube
         run: |
           npm install googleapis
 
+          # Decode final props JSON to props.json
+          echo "${{ steps.final_props.outputs.props_b64 }}" | base64 --decode > props.json
+          echo "Decoded props:"
+          cat props.json
+
           node << 'EOF'
           import fs from "fs";
           import { google } from "googleapis";
 
+          // Load FINAL props
+          const props = JSON.parse(fs.readFileSync("props.json"));
           const basic = JSON.parse(fs.readFileSync("basicData.json"));
 
           const title = basic.title || "Shunya Video";
           const description = basic.desc || "Shunya Description.";
+          const tags = basic.tags || ["music", "song", "lofi", "beats"];
+
+          // DIRECTLY use manual prop (your exact request)
+          const thumbnail = props.thumbnail || null;
 
           console.log("Uploading to YouTube…");
-          console.log("Title:", title);
+          console.log("Thumbnail:", thumbnail);
 
+          // OAuth2
           const oauth2Client = new google.auth.OAuth2(
             process.env.YT_CLIENT_ID,
             process.env.YT_CLIENT_SECRET
@@ -181,18 +194,54 @@ jobs:
             auth: oauth2Client
           });
 
-          const res = await youtube.videos.insert({
+          // ------------------------------------
+          // Upload the video
+          // ------------------------------------
+          const uploadRes = await youtube.videos.insert({
             part: "snippet,status",
             requestBody: {
-              snippet: { title, description },
-              status: { privacyStatus: "public" }
+              snippet: {
+                title,
+                description,
+                defaultLanguage: "en",
+                categoryId: "10",   // Music category
+                tags
+              },
+              status: {
+                privacyStatus: "public",
+                selfDeclaredMadeForKids: false,
+                embeddable: true,
+                license: "youtube",
+                publicStatsViewable: true
+              }
             },
             media: {
               body: fs.createReadStream("out/video.mp4")
             }
           });
 
-          console.log("🎉 Uploaded to YouTube! Video ID:", res.data.id);
+          const videoId = uploadRes.data.id;
+          console.log("🎉 Video uploaded! ID:", videoId);
+
+          // ------------------------------------
+          // Upload Thumbnail (DIRECTLY FROM PROPS)
+          // ------------------------------------
+          if (thumbnail) {
+            console.log("Uploading thumbnail:", thumbnail);
+
+            const download = await fetch(thumbnail);
+            const buffer = Buffer.from(await download.arrayBuffer());
+            fs.writeFileSync("thumbnail.jpg", buffer);
+
+            await youtube.thumbnails.set({
+              videoId,
+              media: { body: fs.createReadStream("thumbnail.jpg") }
+            });
+
+            console.log("🖼 Thumbnail uploaded!");
+          } else {
+            console.log("⚠ No thumbnail provided in props");
+          }
           EOF
         env:
           YT_CLIENT_ID: ${{ secrets.YT_CLIENT_ID }}
