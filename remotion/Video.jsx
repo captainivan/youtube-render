@@ -1,4 +1,3 @@
-
 import "./remotion.css";
 import React from "react";
 import {
@@ -16,18 +15,21 @@ export const Video = ({ bgImage, audio, subtitles }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
 
-  // Clean words
-  const cleaned = words
-    .filter((w) => w.type === "word")
-    .map((w) => ({
-      text: w.text.trim(),
-      start: w.start * 1000,
-      end: w.end === w.start ? (w.start + 0.2) * 1000 : w.end * 1000,
-    }));
+  
+  const cleaned = words.map((w) => ({
+    text: w.text.trim(),
+    start: w.start / 1000, // ms → seconds
+    end:
+      w.end === w.start
+        ? w.start / 1000 + 0.2
+        : w.end / 1000 + 0.05, // slight linger for lyrics
+  }));
 
   if (!cleaned.length) return null;
 
-  // Chunk into max 5 words
+  /**
+   * Chunk words into groups (max 5 words)
+   */
   function chunkWords(list, size = 5) {
     const chunks = [];
     for (let i = 0; i < list.length; i += size) {
@@ -43,12 +45,18 @@ export const Video = ({ bgImage, audio, subtitles }) => {
 
   let chunks = chunkWords(cleaned);
 
-  // Auto line break
+  /**
+   * Auto line break for long text
+   */
   function splitLines(text) {
     const arr = text.split(" ");
     if (arr.length <= 2) return text;
     const mid = Math.ceil(arr.length / 2);
-    return arr.slice(0, mid).join(" ") + "<br/>" + arr.slice(mid).join(" ");
+    return (
+      arr.slice(0, mid).join(" ") +
+      "<br/>" +
+      arr.slice(mid).join(" ")
+    );
   }
 
   chunks = chunks.map((c) => ({
@@ -56,18 +64,23 @@ export const Video = ({ bgImage, audio, subtitles }) => {
     finalText: c.text.length > 20 ? splitLines(c.text) : c.text,
   }));
 
-  // Hold until next subtitle
+  /**
+   * Hold subtitle until next one starts
+   */
   for (let i = 0; i < chunks.length - 1; i++) {
     chunks[i].end = chunks[i + 1].start;
   }
 
   const finalSubs = chunks;
 
-  // Background zoom
+  /**
+   * Background slow zoom
+   */
   const zoomScale = 1 + frame / (fps * 1500);
 
   return (
     <AbsoluteFill>
+      {/* Background */}
       <Img
         src={bgImage}
         style={{
@@ -78,19 +91,24 @@ export const Video = ({ bgImage, audio, subtitles }) => {
         }}
       />
 
+      {/* Audio */}
       <Html5Audio src={audio} />
 
+      {/* Subtitles */}
       <AbsoluteFill style={{ zIndex: 10 }}>
         {finalSubs.map((s, i) => {
-          const start = s.start / 1000;
-          const end = s.end / 1000;
-
-          const from = Math.floor(start * fps);
-          const to = Math.floor(end * fps);
+          /**
+           * Time (seconds) → frames
+           */
+          const from = Math.floor(s.start * fps);
+          const to = Math.floor(s.end * fps);
           const duration = Math.max(to - from, 1);
 
           const elapsed = frame - from;
 
+          /**
+           * Smooth fade in/out
+           */
           const appear = Math.min(1, elapsed / (fps * 0.35));
           const disappear = Math.min(1, (to - frame) / (fps * 0.35));
 
